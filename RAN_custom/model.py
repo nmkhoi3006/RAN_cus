@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from .layer import Conv, ResidualBlock, TrunkBranch, Conv1x1, AttentionModule
+from layer import Conv, ResidualBlock, TrunkBranch, Conv1x1, AttentionModule
 
 class ResidualAttentionModel(nn.Module):
     def __init__(self, in_channels, num_classes, drop_out=0.2, p=1, t=2, r=1):
@@ -51,7 +51,16 @@ class ResidualAttentionModel(nn.Module):
 
 
 if __name__ == "__main__":
-    data = torch.randn(1, 3, 32, 32)
-    layer = ResidualAttentionModel(in_channels=3, num_classes=4)
+    torch.autograd.set_detect_anomaly(True)  # Enable anomaly detection
+
+    data = torch.randn(1, 512, 32, 32, requires_grad=True)
+    layer = ResidualAttentionModel(in_channels=512, num_classes=4)
     out = layer(data)
-    print(out.shape)
+
+    # Example loss computation
+    target = torch.randn_like(out)
+    loss = nn.MSELoss()(out, target)
+
+    # Backward pass
+    loss.backward()
+    print("Backward pass completed successfully.")

@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 def autopad(k, d=1):  # kernel, padding, dilation
     """Pad to 'same' shape outputs."""
@@ -14,7 +15,7 @@ class Conv(nn.Module):
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k), bias=False)
         self.bn = nn.BatchNorm2d(c2)
-        self.act = nn.ReLU(inplace=True) if act else nn.Identity()
+        self.act = nn.ReLU(inplace=False) if act else nn.Identity()  # Removed inplace=True
 
     def forward(self, x):
         return self.act(self.bn(self.conv(x)))
@@ -36,7 +37,7 @@ class ResidualBlock(nn.Module):
         x = self.conv2(x)
         x = self.conv3(x)
 
-        x += self.add(residual)
+        x = x + self.add(residual)
         return x
     
 class TrunkBranch(nn.Module):
@@ -68,17 +69,14 @@ class MaskBranch(nn.Module):
         self.mpool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.residual_block1 = nn.ModuleList([ResidualBlock(c, c, k, s, act) for _ in range(r)])
 
-        self.skip_connection = ResidualBlock(c, c, k, s, act)
+        self.skip_connection = ResidualBlock(c, c, k, s, act=False)
 
         self.mpool2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.mid_residual_block = nn.ModuleList([ResidualBlock(c, c, k, s, act) for _ in range(2*r)])
-        self.interpolation1 = nn.Upsample(scale_factor=2, mode='bilinear')
+        self.mid_residual_block = nn.ModuleList([ResidualBlock(c, c, k, s, act) for _ in range(2 * r)])
 
         self.residual_block2 = nn.ModuleList([ResidualBlock(c, c, k, s, act) for _ in range(r)])
-        self.interpolation2 = nn.Upsample(scale_factor=2, mode='bilinear')
-
         self.conv_1x1 = Conv1x1(c, k, s, act)
-    
+
     def forward(self, x):
         x = self.mpool1(x)
         for layer in self.residual_block1:
@@ -89,14 +87,15 @@ class MaskBranch(nn.Module):
         x = self.mpool2(x)
         for layer in self.mid_residual_block:
             x = layer(x)
-        x = self.interpolation1(x)
 
-        x += skip_connection
+        # Replace nn.Upsample with F.interpolate
+        x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
+        x = x + skip_connection
 
         for layer in self.residual_block2:
             x = layer(x)
 
-        x = self.interpolation2(x)
+        x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
         x = self.conv_1x1(x)
         return x
     
@@ -118,14 +117,22 @@ class AttentionModule(nn.Module):
         mask_out = self.mask_branch(x)
 
         x = (1 + mask_out) * trunk_out
-        x += trunk_out
+        x = x + trunk_out
         for layer in self.post_residual_block:
             x = layer(x)
         return x
 
 if __name__ == "__main__":
-    data = torch.randn(1, 512, 32, 32)
+    torch.autograd.set_detect_anomaly(True)  # Enable anomaly detection
 
+    data = torch.randn(1, 512, 32, 32, requires_grad=True)
     layer = AttentionModule(c=512, k=3)
     out = layer(data)
-    print(out.shape)  # Expected output shape: (1, 2, 32, 32)
+
+    # Example loss computation
+    target = torch.randn_like(out)
+    loss = nn.MSELoss()(out, target)
+
+    # Backward pass
+    loss.backward()
+    print("Backward pass completed successfully.")
