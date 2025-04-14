@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from layer import Conv, ResidualBlock, TrunkBranch, Conv1x1, AttentionModule
+from .layer import Conv, ResidualBlock, TrunkBranch, Conv1x1, AttentionModule
 
 class ResidualAttentionModel(nn.Module):
     def __init__(self, in_channels, num_classes, drop_out=0.2, p=1, t=2, r=1):
