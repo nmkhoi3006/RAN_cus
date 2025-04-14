@@ -22,7 +22,7 @@ class ResidualAttentionModel(nn.Module):
             ResidualBlock(c1=1024, c2=1024, k=3, s=1, act=True),
             ResidualBlock(c1=1024, c2=1024, k=3, s=1, act=True)
         )   
-        self.dropout = nn.Dropout(drop_out, inplace=True)
+        self.dropout = nn.Dropout(drop_out)
 
         self.avgpool = nn.Sequential(
             nn.BatchNorm2d(1024),
