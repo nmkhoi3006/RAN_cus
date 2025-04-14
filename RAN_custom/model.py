@@ -3,7 +3,7 @@ from torch import nn
 from layer import Conv, ResidualBlock, TrunkBranch, Conv1x1, AttentionModule
 
 class ResidualAttentionModel(nn.Module):
-    def __init__(self, in_channels, num_classes, p=1, t=2, r=1):
+    def __init__(self, in_channels, num_classes, drop_out=0.2, p=1, t=2, r=1):
         super().__init__()
         self.in_conv = Conv(c1=in_channels, c2=32, k=5, s=1, act=True) #32x32
 
@@ -21,7 +21,8 @@ class ResidualAttentionModel(nn.Module):
             ResidualBlock(c1=512, c2=1024, k=3, s=1, act=True),
             ResidualBlock(c1=1024, c2=1024, k=3, s=1, act=True),
             ResidualBlock(c1=1024, c2=1024, k=3, s=1, act=True)
-        )
+        )   
+        self.dropout = nn.Dropout(drop_out, inplace=True)
 
         self.avgpool = nn.Sequential(
             nn.BatchNorm2d(1024),
@@ -43,6 +44,7 @@ class ResidualAttentionModel(nn.Module):
         x = self.stage_3(x)
 
         x = self.residual_block(x)
+        x = self.dropout(x)
         x = self.avgpool(x)
         x = self.fc(x.view(x.size(0), -1))
         return x
