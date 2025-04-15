@@ -43,7 +43,7 @@ class ResidualBlock(nn.Module):
 class TrunkBranch(nn.Module):
     def __init__(self, c, k, t=2, s=1, act=True):
         super().__init__()
-        self.block = nn.ModuleList([ResidualBlock(c, c, k, s, act) for _ in range(t)])
+        self.block = nn.ModuleList([C2f(c, c, k, num_bottle=3) for _ in range(t)])
 
     def forward(self, x):
         for layer in self.block:
