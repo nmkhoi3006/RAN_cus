@@ -43,7 +43,7 @@ class ResidualBlock(nn.Module):
 class TrunkBranch(nn.Module):
     def __init__(self, c, k, t=2, s=1, act=True):
         super().__init__()
-        self.block = nn.ModuleList([Conv(c, c, k, s, act) for _ in range(t)])
+        self.block = nn.ModuleList([ResidualBlock(c, c, k, s, act) for _ in range(t)])
 
     def forward(self, x):
         for layer in self.block:
@@ -121,6 +121,44 @@ class AttentionModule(nn.Module):
         for layer in self.post_residual_block:
             x = layer(x)
         return x
+
+class Bottleneck(nn.Module):
+    def __init__(self, c1, c2, k, shortcut=True, g=1):
+        super().__init__()
+        self.conv1 = Conv(c1, c2, k)
+        self.conv2 = Conv(c2, c2, k)
+        self.shortcut = shortcut and c1 == c2
+
+    def forward(self, x):
+        residual = x
+        x = self.conv1(x)
+        x = self.conv2(x)   
+        if self.shortcut:
+            x = x + residual
+        return x
+
+
+class C2f(nn.Module):
+    def __init__(self, c1, c2, k, num_bottle, e=0.5, shortcut=True): #k for kernel size in bottleneck
+        super().__init__()
+        self.hidden_c = int(c2 * e)
+        self.conv1 = Conv(c1, c2, 1)
+        self.conv2 = Conv(self.hidden_c*(num_bottle+2), c2, 1)
+
+        self.m = nn.ModuleList([Bottleneck(self.hidden_c, self.hidden_c, k, shortcut) for _ in range(num_bottle)])
+
+    def forward(self, x):
+        x = self.conv1(x)
+        
+        x1, x2 = x[:, :self.hidden_c, :, :], x[:, self.hidden_c:, :, :]
+        
+        output = [x1, x2]
+        for layer in self.m:
+            x1 = layer(x1)
+            output.append(x1)
+        
+        out = torch.cat(output, dim=1)
+        return self.conv2(out)
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)  # Enable anomaly detection
